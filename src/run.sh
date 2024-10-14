@@ -12,7 +12,7 @@ windows_size=3
 eps=0.5
 
 # nohup python -u prepare_data.py --group_num 60 --windows_size ${windows_size} --eps ${eps} --dat_name ${dataname} --is_load 0 &> kuaicomt_dataset.log &
-python prepare_data.py --group_num 60 --windows_size ${windows_size} --eps ${eps} --dat_name ${dataname} --is_load 0
+# python prepare_data.py --group_num 60 --windows_size ${windows_size} --eps ${eps} --dat_name ${dataname} --is_load 0
 
 randseed=61
 c_inv=40
