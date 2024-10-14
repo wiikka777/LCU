@@ -75,7 +75,7 @@ class Learner(object):
 
     def _load_and_spilt_dat(self):
         if self.dat_name == 'KuaiComt':
-            all_dat = pd.read_csv('../rec_datasets/WM_KuaiComt/KuaiComt_filtered.csv')
+            all_dat = pd.read_csv('../rec_datasets/WM_KuaiComt/KuaiComt_subset.csv')
             all_dat = cal_ground_truth(all_dat, self.dat_name)
             train_dat = all_dat[(all_dat['date'] <= 2023102199) & (all_dat['date'] >= 2023100100)]
             vali_dat = all_dat[(all_dat['date'] <= 2023102699) & (all_dat['date'] >= 2023102200)]
