@@ -35,43 +35,19 @@ def get_range_label(days):
 def pre_kuaicomt():
 
     # KuaiComt
-    #print("Read Start...")
     df_kuaiComt_interaction_ls = []
-    #file_names = ['../rec_datasets/KuaiComt/user_photo_filtered_table.csv']
-#     file_names = ['../rec_datasets/KuaiComt/user_photo_final_table.csv']
     file_names = ['../rec_datasets/KuaiComt/user_photo_final_filtered_table.csv']
-    # file_names = ['../rec_datasets/KuaiComt/user_photo_table_1001_1003.csv',
-    #              '../rec_datasets/KuaiComt/user_photo_table_1003_1005.csv',
-    #              '../rec_datasets/KuaiComt/user_photo_table_1005_1006.csv',
-    #              '../rec_datasets/KuaiComt/user_photo_table_1006_1007.csv',
-    #              '../rec_datasets/KuaiComt/user_photo_table_1007_1009.csv',
-    #              '../rec_datasets/KuaiComt/user_photo_table_1009_1012.csv',
-    #              '../rec_datasets/KuaiComt/user_photo_table_1012_1014.csv',
-    #              '../rec_datasets/KuaiComt/user_photo_table_1014_1016.csv',
-    #              '../rec_datasets/KuaiComt/user_photo_table_1016_1020.csv',
-    #              '../rec_datasets/KuaiComt/user_photo_table_1020_1023.csv',
-    #              '../rec_datasets/KuaiComt/user_photo_table_1023_1027.csv',
-    #              '../rec_datasets/KuaiComt/user_photo_table_1027_1029.csv',
-    #              '../rec_datasets/KuaiComt/user_photo_table_1029_1101.csv']
     for file_name in file_names:
         df_kuaiComt_interaction_ls.append(pd.read_csv(file_name, sep='\t'))
-    #print("Read Inter Done...")
     df_kuaiComt_usr_fe = pd.read_csv('../rec_datasets/KuaiComt/user_table_final.csv',sep='\t')
-    #print("Read User Done...")
     df_kuaiComt_video_fe_basic = pd.read_csv('../rec_datasets/KuaiComt/photo_table_final.csv',sep='\t', lineterminator='\n')
-    #print("Read Video Done...")
 
 
-    # df_kuaiComt_interaction_standard = df_kuaiComt_interaction_1.append(df_kuaiComt_interaction_2)
-#     df_kuaiComt_interaction_standard = df_kuaiComt_interaction_1
     df_kuaiComt_interaction_standard = pd.concat(df_kuaiComt_interaction_ls,axis=0)
 
     df_kuaiComt_interaction_standard['play_time_truncate'] = df_kuaiComt_interaction_standard.apply(lambda row:row['play_time_ms'] if row['play_time_ms']<row['duration_ms'] else row['duration_ms'],axis=1)
-    # df_kuaiComt_interaction_standard['duration_ms'] = df_kuaiComt_interaction_standard['duration_ms'].apply(lambda x: np.round(x/1e3))
     df_kuaiComt_interaction_standard['duration_ms'] = np.round(df_kuaiComt_interaction_standard['duration_ms'].values/1e3)
-    # df_kuaiComt_interaction_standard['play_time_ms'] = df_kuaiComt_interaction_standard['play_time_ms'].apply(lambda x: np.round(x/1e3))
     df_kuaiComt_interaction_standard['play_time_ms'] = np.round(df_kuaiComt_interaction_standard['play_time_ms'].values/1e3)
-    # df_kuaiComt_interaction_standard['play_time_truncate'] = df_kuaiComt_interaction_standard['play_time_truncate'].apply(lambda x: np.round(x/1e3))
     df_kuaiComt_interaction_standard['play_time_truncate'] = np.round(df_kuaiComt_interaction_standard['play_time_truncate'].values/1e3)
 
     df_kuaiComt_interaction_standard['comment_stay_time'] = df_kuaiComt_interaction_standard['comment_stay_time'].values/1e3
@@ -81,7 +57,6 @@ def pre_kuaicomt():
 
 
     # preprocess the user feature
-    # dic_user_active_degree = {'full_active':3,'high_active':2, 'middle_active':1,'2_14_day_new':-1,'low_active':0,'single_low_active':0,'30day_retention':-1,'day_new':-1, 'UNKNOWN':-1}
     dic_user_active_degree = {'full_active':4,'high_active':3, 'middle_active':2,'2_14_day_new':0,'low_active':1,'single_low_active':1,'30day_retention':0,'day_new':0, 'UNKNOWN':0}
     df_kuaiComt_usr_fe['user_active_degree'] = df_kuaiComt_usr_fe['user_active_degree'].apply(lambda x: dic_user_active_degree[x])
 
@@ -95,32 +70,11 @@ def pre_kuaicomt():
     df_kuaiComt_usr_fe['friend_user_num_range'] = df_kuaiComt_usr_fe['friend_user_num_range'].apply(lambda x: dic_friend_user_num_range[x])
 
     dic_register_days_range = {'8-14':0,'15-30':0, '31-60':1, '61-90':2, '91-180':3, '181-365':4, '366-730':5, '730+':6}
-#     df_kuaiComt_usr_fe['register_days_range'] = df_kuaiComt_usr_fe['register_days_range'].apply(lambda x: dic_register_days_range[x])
     df_kuaiComt_usr_fe['register_days_range'] = df_kuaiComt_usr_fe['register_days'].apply(lambda x: dic_register_days_range[get_range_label(x)])
-
-    # df_kuaiComt_usr_fe['is_lowactive_period'] = np.nan_to_num(df_kuaiComt_usr_fe['is_lowactive_period'].values, nan=0.0, posinf=0.0, neginf=0.0)
 
     # preprocess the video feature
     dic_video_type = {'NORMAL':1,'AD':0,'UNKNOWN':0}
     df_kuaiComt_video_fe_basic['video_type'] = df_kuaiComt_video_fe_basic['photo_type'].apply(lambda x: dic_video_type[x])
-
-    # dic_upload_type = {'LongImport':0,
-    #                    'ShortImport':1,
-    #                    'Web':2,
-    #                    'Kmovie':3,
-    #                    'LongPicture':4,
-    #                    'PictureSet':5,
-    #                    'LongCamera':6,
-    #                    'ShortCamera':7,
-    #                    'ShareFromOtherApp':8,
-    #                    'FollowShoot':9,
-    #                    'AiCutVideo':10,
-    #                    'LipsSync':11,
-    #                    'PhotoCopy':12,
-    #                    'UNKNOWN':-1,}
-    #dic_upload_type = dict(zip(df_kuaiComt_video_fe_basic['upload_type'].unique().tolist(),list(range(len(df_kuaiComt_video_fe_basic['upload_type'].unique())))))
-    #df_kuaiComt_video_fe_basic['upload_type'] = df_kuaiComt_video_fe_basic['upload_type'].apply(lambda x: dic_upload_type[x])
-
     df_kuaiComt_video_fe_basic['category'] = df_kuaiComt_video_fe_basic['category'].apply(lambda x: str(x).split(','))
 
     total_ls = contain_ls(df_kuaiComt_video_fe_basic['category'].values)
@@ -135,7 +89,6 @@ def pre_kuaicomt():
     df_kuaiComt_interaction_standard['video_id'] = df_kuaiComt_interaction_standard['photo_id']
 
     # select duration range and featrues
-    # df_sel_dat = df_kuaiComt_interaction_standard[(df_kuaiComt_interaction_standard['duration_ms']<=240) & (df_kuaiComt_interaction_standard['duration_ms']>=5)]
     df_sel_dat = df_kuaiComt_interaction_standard[(df_kuaiComt_interaction_standard['duration_ms']>=5) & (df_kuaiComt_interaction_standard['duration_ms']<=400)]
     df_sel_dat = df_sel_dat[['date', 'time_ms', 'user_id','video_id','author_id','category','video_type',
                             'is_like','is_follow','is_comment','is_forward','is_hate',
@@ -147,16 +100,12 @@ def pre_kuaicomt():
     user_id_map = dict(zip(np.sort(df_sel_dat['user_id'].unique()),range(len(df_sel_dat['user_id'].unique()))))
     video_id_map = dict(zip(np.sort(df_sel_dat['video_id'].unique()),range(len(df_sel_dat['video_id'].unique()))))
     author_id_map = dict(zip(np.sort(df_sel_dat['author_id'].unique()),range(len(df_sel_dat['author_id'].unique()))))
-    #music_id_map = dict(zip(np.sort(df_sel_dat['music_id'].unique()),range(len(df_sel_dat['music_id'].unique()))))
     category_map = dict(zip(np.sort(df_sel_dat['category'].unique()),range(len(df_sel_dat['category'].unique()))))
-    #upload_type_map = dict(zip(np.sort(df_sel_dat['upload_type'].unique()),range(len(df_sel_dat['upload_type'].unique()))))
 
     df_sel_dat['user_id'] = df_sel_dat['user_id'].apply(lambda x: user_id_map[x])
     df_sel_dat['video_id'] = df_sel_dat['video_id'].apply(lambda x: video_id_map[x])
     df_sel_dat['author_id'] = df_sel_dat['author_id'].apply(lambda x: author_id_map[x])
-    #df_sel_dat['music_id'] = df_sel_dat['music_id'].apply(lambda x: music_id_map[x])
     df_sel_dat['category'] = df_sel_dat['category'].apply(lambda x: category_map[x])
-    #df_sel_dat['upload_type'] = df_sel_dat['upload_type'].apply(lambda x: upload_type_map[x])
 
     return df_sel_dat
 
