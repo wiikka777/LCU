@@ -14,6 +14,8 @@ from utils.early_stop import EarlyStopping2
 from utils.loss import ListMLELoss
 from utils.evaluate import cal_group_metric, cal_reg_metric
 from preprocessing.cal_ground_truth import cal_ground_truth
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "" 
 
 class Learner(object):
     
@@ -49,14 +51,14 @@ class Learner(object):
         self.lambda2 = args.lambda2
         
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.photo_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings.pt', map_location=device).to(dtype=torch.float32).to(device)
+        self.photo_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings.pt', map_location=device)[:100].to(dtype=torch.float32).to(device)
         #self.photo_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings.pt').to(dtype=torch.float32).cuda()
         print("Loading pre-computed text embeddings...")
         self.photo_embeddings.requires_grad = False  # 冻结嵌入
 
         # 加载评论的BERT嵌入
         #self.comment_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings_comments.pt').to(dtype=torch.float32).cuda()
-        self.comment_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings_comments.pt').to(dtype=torch.float32).to(device)
+        self.comment_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings_comments.pt')[:100].to(dtype=torch.float32).to(device)
 
         print("Loading pre-computed comment embeddings...")
         self.comment_embeddings.requires_grad = False  # 冻结嵌入
@@ -79,7 +81,7 @@ class Learner(object):
 
     def _load_and_spilt_dat(self):
         if self.dat_name == 'KuaiComt':
-            all_dat = pd.read_csv('../rec_datasets/WM_KuaiComt/KuaiComt_subset.csv')
+            all_dat = pd.read_csv('../rec_datasets/WM_KuaiComt/KuaiComt_subset.csv',nrows=100)
             all_dat = all_dat.head(100)
             #all_dat = cal_ground_truth(all_dat, self.dat_name)
             train_size = int(len(all_dat) * 0.6)
@@ -152,11 +154,14 @@ class Learner(object):
             loss_log = []
             c_loss_log = []
 
-            self.model.train()
-            self.c_model.train()
+            #self.model.train()
+            #self.c_model.train()
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.model.to(device)
+            self.c_model = self.c_model.to(device)
 
             for _id, batch in enumerate(self.train_loader):
-                batch = [item.cuda() for item in batch]
+                batch = [item.to(device) for item in batch]
                 self.c_model.train()
                 self.c_optim.zero_grad()
                 BCELossfunc = BCEWithLogitsLoss()
@@ -210,6 +215,20 @@ class Learner(object):
                                                         0, rmse, mae, xgauc, xauc))
 
     def _test_and_save(self):
+        for batch in self.test_loader:
+            print("Test batch x[:, :-6] max:", batch[0][:, :-6].max().item(), "min:", batch[0][:, :-6].min().item())
+            break  # Check first batch only
+        
+        # 计算 comment_dims（根据 comment ID 最大值）
+        all_comment_ids = pd.concat([
+        self.all_dat['comment0_id'], self.all_dat['comment1_id'],
+        self.all_dat['comment2_id'], self.all_dat['comment3_id'],
+        self.all_dat['comment4_id'], self.all_dat['comment5_id']
+         ])
+        comment_field_dim = all_comment_ids.max() + 1
+        comment_dims = [comment_field_dim] * 6
+        print("comments_dims:", comment_dims, type(comment_dims))
+        
         if self.model_name == 'DCN':
             model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
             c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
