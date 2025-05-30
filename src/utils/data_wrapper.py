@@ -2,10 +2,10 @@ from torch.utils.data import DataLoader, Dataset
 import torch
 import ast
 import numpy as np
-
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Wrap_Dataset(Dataset):
     """Wrapper, convert <doc_feature, click_tag, ips_weight> Tensor into Pytorch Dataset"""
-    def __init__(self, X, y, use_cuda=True):
+    def __init__(self, X, y, use_cuda=False):
         if use_cuda:
             self.X = torch.LongTensor(X).cuda()
             self.y = torch.Tensor(y).cuda()
@@ -23,7 +23,7 @@ class Wrap_Dataset(Dataset):
 
 class Wrap_Dataset2(Dataset):
     """Wrapper, convert <doc_feature, click_tag, ips_weight> Tensor into Pytorch Dataset"""
-    def __init__(self, X, y, X_usr, duration ,use_cuda=True):
+    def __init__(self, X, y, X_usr, duration ,use_cuda=False):
         if use_cuda:
             self.X = torch.LongTensor(X).cuda()
             self.X_usr = torch.LongTensor(X_usr).cuda()
@@ -45,7 +45,7 @@ class Wrap_Dataset2(Dataset):
 
 class Wrap_Dataset3(Dataset):
     """Wrapper, convert <doc_feature, click_tag, ips_weight> Tensor into Pytorch Dataset"""
-    def __init__(self, X, y, weight ,use_cuda=True):
+    def __init__(self, X, y, weight ,use_cuda=False):
         if use_cuda:
             self.X = torch.LongTensor(X).cuda()
             self.y = torch.Tensor(y).cuda()
@@ -64,7 +64,7 @@ class Wrap_Dataset3(Dataset):
 
 class Wrap_Dataset4(Dataset):
     """Wrapper, convert <doc_feature, click_tag, ips_weight> Tensor into Pytorch Dataset"""
-    def __init__(self, X, y, weight, y1, y2, use_cuda=True):
+    def __init__(self, X, y, weight, y1, y2, use_cuda=False):
         if use_cuda:
             self.X = torch.LongTensor(X).cuda()
             self.y = torch.Tensor(y).cuda()
