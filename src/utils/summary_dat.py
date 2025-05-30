@@ -29,10 +29,12 @@ def cal_comments_dims(df, data_name):
         fe_names = ['comment0_id', 'comment1_id', 'comment2_id', 'comment3_id', 'comment4_id', 'comment5_id']
     
     # 计算每一列的最大值
-    max_values = [df[fe].max() for fe in fe_names]
-    field_dim = max(max_values) + 1  # 加 1 是为了将最大值作为合法索引
+    #max_values = [df[fe].max() for fe in fe_names]
+    #field_dim = max(max_values) + 1  # 加 1 是为了将最大值作为合法索引
+    comment_dims = [int(df[fe].max()) + 1 for fe in fe_names]
     
     print(f"Comments feature names: {fe_names}")
-    print(f"Total unique field dimensions: {field_dim}")
+    #print(f"Total unique field dimensions: {field_dim}")
+    print(f"Comment field dimensions: {comment_dims}")
     
-    return field_dim
+    return comment_dims
