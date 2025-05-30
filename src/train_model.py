@@ -80,12 +80,16 @@ class Learner(object):
     def _load_and_spilt_dat(self):
         if self.dat_name == 'KuaiComt':
             all_dat = pd.read_csv('../rec_datasets/WM_KuaiComt/KuaiComt_subset.csv')
-            all_dat = cal_ground_truth(all_dat, self.dat_name)
-            train_dat = all_dat[(all_dat['date'] <= 2023102199) & (all_dat['date'] >= 2023100100)]
-            vali_dat = all_dat[(all_dat['date'] <= 2023102699) & (all_dat['date'] >= 2023102200)]
-            test_dat = all_dat[(all_dat['date'] <= 2023103199) & (all_dat['date'] >= 2023102700)]
+            all_dat = all_dat.head(100)
+            #all_dat = cal_ground_truth(all_dat, self.dat_name)
+            train_size = int(len(all_dat) * 0.6)
+            vali_size = int(len(all_dat) * 0.2)
+            
+            train_dat = all_dat[:train_size]
+            vali_dat = all_dat[train_size:train_size + vali_size]
+            test_dat = all_dat[train_size + vali_size:]
 
-        return all_dat, train_dat, vali_dat, test_dat
+        return train_dat, vali_dat, test_dat
 
 
     def _wrap_dat(self):
