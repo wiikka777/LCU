@@ -11,7 +11,7 @@ def str2bool(v):
 
 def config_param_parser():
     parser = argparse.ArgumentParser(description="Experiment Configures and Model Parameters")
-    parser.add_argument('--dat_name', type=str, choices=['KuaiRand','WeChat','KuaiShou2018','KuaiComt'], required=True)
+    parser.add_argument('--dat_name', type=str, choices=['KuaiRand','WeChat','KuaiShou2018','KuaiComt',"WM_KuaiComt"], required=True)
     parser.add_argument('--model_name', type=str, choices=['FM','DFM','AFM','NFM','AFI','DCN','xDFM'], required=True)
     parser.add_argument('--label_name', type=str, choices=['long_view2','PCR','PCR_st','PCR_denoise','play_time_truncate','play_time_truncate_denoise','percentile','percentile_st','percentile_denoise',
                                                             'gain','gain_denoise','gain_prob','gain_prob_denoise','GMM','scale_wt','D2Q','WTG','D2Co','BWT','WTG_denoise','D2Q_denoise','GMM_clip',

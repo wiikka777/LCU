@@ -48,12 +48,16 @@ class Learner(object):
         self.lambda1 = args.lambda1
         self.lambda2 = args.lambda2
         
-        self.photo_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings.pt').to(dtype=torch.float32).cuda()
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.photo_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings.pt', map_location=device).to(dtype=torch.float32).to(device)
+        #self.photo_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings.pt').to(dtype=torch.float32).cuda()
         print("Loading pre-computed text embeddings...")
         self.photo_embeddings.requires_grad = False  # 冻结嵌入
 
         # 加载评论的BERT嵌入
-        self.comment_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings_comments.pt').to(dtype=torch.float32).cuda()
+        #self.comment_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings_comments.pt').to(dtype=torch.float32).cuda()
+        self.comment_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings_comments.pt').to(dtype=torch.float32).to(device)
+
         print("Loading pre-computed comment embeddings...")
         self.comment_embeddings.requires_grad = False  # 冻结嵌入
 
@@ -115,9 +119,12 @@ class Learner(object):
             model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
             c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
 
-        if self.use_cuda:
-            model = model.cuda()
-            c_model = c_model.cuda()
+        #if self.use_cuda:
+            #model = model.cuda()
+            #c_model = c_model.cuda()
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = model.to(device)
+        c_model = c_model.to(device)
 
         lr = 1e-4
         optim = Adam(model.parameters(), lr=lr, weight_decay=self.weight_decay)
@@ -200,8 +207,12 @@ class Learner(object):
             model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
             c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
 
-        model = model.cuda()
-        c_model = c_model.cuda()
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        #model = model.cuda()
+        #c_model = c_model.cuda()
+        model=model.to(device)
+        c_model=c_model.to(device)
 
         model.load_state_dict(torch.load(self.fout + '_temp_checkpoint.pt'))
         c_model.load_state_dict(torch.load(self.fout + '_temp_usr_checkpoint.pt'))
