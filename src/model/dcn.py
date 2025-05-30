@@ -41,7 +41,9 @@ class My_DeepCrossNetworkModel_withCommentsRanking(nn.Module):
         self.individual_embedding = FeaturesEmbedding(field_dims, embed_dim)
 
         # 共享嵌入层用于 -6:-1 列
-        self.shared_embedding = FeaturesEmbedding([comments_dims], embed_dim)
+        self.shared_embedding = FeaturesEmbedding(comments_dims, embed_dim)
+        print("comments_dims:", comments_dims, type(comments_dims))
+
         
         self.embed_dim = embed_dim
         
