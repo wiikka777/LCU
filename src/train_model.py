@@ -104,14 +104,17 @@ class Learner(object):
 
         input_vali = Wrap_Dataset(make_feature_with_comments(self.vali_dat, self.dat_name),
                                 self.vali_dat[self.label_name].tolist(),
-                                self.vali_dat[self.weight_name].tolist())
+                                #self.vali_dat[self.weight_name].tolist(),
+                                use_cuda=False)
+                                 
         vali_loader = DataLoader(input_vali, 
                                         batch_size=2048, 
                                         shuffle=False)
 
         input_test = Wrap_Dataset(make_feature_with_comments(self.test_dat, self.dat_name),
                                 self.test_dat[self.label_name].tolist(),
-                                self.test_dat[self.weight_name].tolist())
+                                #self.test_dat[self.weight_name].tolist(),
+                                use_cuda=False)
         test_loader = DataLoader(input_test, 
                                         batch_size=2048, 
                                         shuffle=False)
