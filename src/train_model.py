@@ -89,7 +89,7 @@ class Learner(object):
             vali_dat = all_dat[train_size:train_size + vali_size]
             test_dat = all_dat[train_size + vali_size:]
 
-        return train_dat, vali_dat, test_dat
+        return all_dat,train_dat, vali_dat, test_dat
 
 
     def _wrap_dat(self):
