@@ -37,12 +37,12 @@ def main():
     if dat_name == 'KuaiComt':
         if is_load == True:
             print('Load Processed Data...')
-            kuaicomt_dat = pd.read_csv('../rec_datasets/WM_KuaiComt/KuaiComt_subset.csv')
+            kuaicomt_dat = pd.read_csv('../rec_datasets/WM_KuaiComt/KuaiComt_subset.csv',nrows=100)
 
             print('Cal Ground Truth Labels...')
             kuaicomt_dat = cal_ground_truth(kuaicomt_dat, dat_name)
 
-            kuaicomt_dat.to_csv('../rec_datasets/WM_KuaiComt/KuaiComt_subset.csv')
+            kuaicomt_dat.to_csv('../rec_datasets/WM_KuaiComt/KuaiComt_subset.csv',nrows=100)
             print(kuaicomt_dat.head(10))
         else:
             print('Load Raw Data...')
@@ -54,7 +54,7 @@ def main():
             print('Cal Ground Truth Labels...')
             kuaicomt_dat = cal_ground_truth(kuaicomt_dat, dat_name)
 
-            kuaicomt_dat.to_csv('../rec_datasets/WM_KuaiComt/KuaiComt_subset.csv')
+            kuaicomt_dat.to_csv('../rec_datasets/WM_KuaiComt/KuaiComt_subset.csv',nrows=100)
             print(kuaicomt_dat.head(10))
 
 if __name__ == "__main__":
