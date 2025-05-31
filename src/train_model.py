@@ -82,8 +82,35 @@ class Learner(object):
     def _load_and_spilt_dat(self):
         if self.dat_name == 'KuaiComt':
             all_dat = pd.read_csv('../rec_datasets/WM_KuaiComt/KuaiComt_subset.csv',nrows=100)
+            
             all_dat = all_dat.head(100)
             #all_dat = cal_ground_truth(all_dat, self.dat_name)
+            def preprocess_ids(data):
+            # 确保ID从0开始连续索引
+                data['user_id'] = data['user_id'] - data['user_id'].min()
+                data['video_id'] = data['video_id'] - data['video_id'].min()
+                data['author_id'] = data['author_id'] - data['author_id'].min()
+            
+            # 分类特征处理
+                data['follow_user_num_range'] = data['follow_user_num_range'] - 1
+                data['user_active_degree'] = data['user_active_degree'] - 1
+            
+            # 评论ID强制映射到0-99（关键修改）
+                for i in range(6):
+                    col = f'comment{i}_id'
+                    unique_ids = data[col].unique()
+                    id_map = {id: idx for idx, id in enumerate(unique_ids)}
+                    assert len(id_map) <= 100, "评论ID数量超过100，请调整comments_dims"
+                    data[col] = data[col].map(id_map) 
+                return data
+            
+            all_dat = preprocess_ids(all_dat)
+            print("强制映射后评论ID范围:", [all_dat[f'comment{i}_id'].max() for i in range(6)]) 
+            assert all(all_dat[f'comment{i}_id'].max() < 100 for i in range(6))
+            print("预处理后ID范围验证:")
+            print("user_id:", all_dat['user_id'].min(), all_dat['user_id'].max())
+            print("video_id:", all_dat['video_id'].min(), all_dat['video_id'].max())
+            
             train_size = int(len(all_dat) * 0.6)
             vali_size = int(len(all_dat) * 0.2)
             
@@ -124,9 +151,30 @@ class Learner(object):
 
     
     def _init_train_env(self):
+        
         if self.model_name == 'DCN':
-            model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
-            c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
+            field_dims = [
+            int(self.all_dat['user_id'].max()) + 1,        # user_id
+            int(self.all_dat['follow_user_num_range'].max()) + 1,  # follow
+            int(self.all_dat['register_days_range'].max()) + 1,
+            int(self.all_dat['fans_user_num_range'].max()) + 1,
+            int(self.all_dat['friend_user_num_range'].max()) + 1,
+            int(self.all_dat['user_active_degree'].max()) + 1,
+            int(self.all_dat['video_id'].max()) + 1,       # video_id
+            int(self.all_dat['author_id'].max()) + 1 
+            ]
+        # 后 6 个字段：comment0_id 到 comment5_id
+            comments_dims = [100] * 6  
+            total_embed_dim = (len(field_dims) + len(comments_dims)) * 10  # 假设embed_dim=10
+            print(f"期望总嵌入维度: {total_embed_dim}")
+
+            
+            
+            #model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
+            #c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
+            model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=field_dims,comments_dims=comments_dims,embed_dim=10,num_layers=3,mlp_dims=[64, 64, 64],dropout=0.2,text_embeddings=[self.photo_embeddings, self.comment_embeddings])
+            c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=field_dims,comments_dims=comments_dims,embed_dim=10,num_layers=3,mlp_dims=[64, 64, 64],dropout=0.2,text_embeddings=[self.photo_embeddings, self.comment_embeddings])
+
 
         #if self.use_cuda:
             #model = model.cuda()
@@ -215,23 +263,27 @@ class Learner(object):
                                                         0, rmse, mae, xgauc, xauc))
 
     def _test_and_save(self):
-        for batch in self.test_loader:
-            print("Test batch x[:, :-6] max:", batch[0][:, :-6].max().item(), "min:", batch[0][:, :-6].min().item())
-            break  # Check first batch only
-        
-        # 计算 comment_dims（根据 comment ID 最大值）
-        all_comment_ids = pd.concat([
-        self.all_dat['comment0_id'], self.all_dat['comment1_id'],
-        self.all_dat['comment2_id'], self.all_dat['comment3_id'],
-        self.all_dat['comment4_id'], self.all_dat['comment5_id']
-         ])
-        comment_field_dim = all_comment_ids.max() + 1
-        comment_dims = [comment_field_dim] * 6
-        print("comments_dims:", comment_dims, type(comment_dims))
+    # 使用与训练时完全相同的维度计算方法
+        field_dims = [
+           int(self.all_dat['user_id'].max()) + 1,
+           int(self.all_dat['follow_user_num_range'].max()) + 1,
+           int(self.all_dat['register_days_range'].max()) + 1,
+           int(self.all_dat['fans_user_num_range'].max()) + 1,
+           int(self.all_dat['friend_user_num_range'].max()) + 1,
+           int(self.all_dat['user_active_degree'].max()) + 1,
+           int(self.all_dat['video_id'].max()) + 1,
+           int(self.all_dat['author_id'].max()) + 1
+           ]
+    
+        comment_dims = [100] * 6
+    
+        print("测试阶段维度验证:")
+        print("field_dims:", field_dims)
+        print("comment_dims:", comment_dims)
         
         if self.model_name == 'DCN':
-            model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
-            c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
+            model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=field_dims, comments_dims=comment_dims, embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
+            c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=field_dims, comments_dims=comment_dims, embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
