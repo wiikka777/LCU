@@ -2,6 +2,39 @@ import pandas as pd
 import numpy as np
 import datetime
 import os
+from pathlib import Path
+
+def optimize_dataframe_memory(df):
+    """
+    Reduces memory usage of a Pandas DataFrame by downcasting numerical types
+    and converting object columns to categorical if suitable.
+    """
+    for col in df.columns:
+        col_type = df[col].dtype
+
+        if col_type == object:
+            # Convert to category if it's a string column with limited unique values
+            num_unique_values = len(df[col].unique())
+            num_total_values = len(df[col])
+            if num_unique_values / num_total_values < 0.5: # Heuristic: if less than half unique, it might be categorical
+                df[col] = df[col].astype('category')
+        elif 'int' in str(col_type):
+            c_min = df[col].min()
+            c_max = df[col].max()
+            if c_min > np.iinfo(np.int8).min and c_max < np.iinfo(np.int8).max:
+                df[col] = df[col].astype(np.int8)
+            elif c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max:
+                df[col] = df[col].astype(np.int16)
+            elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
+                df[col] = df[col].astype(np.int32)
+            else:
+                df[col] = df[col].astype(np.int64) # Keep as int64 if range is too large for smaller ints
+        elif 'float' in str(col_type):
+            df[col] = df[col].astype(np.float32) # Downcast to float32
+
+    # print(f"Memory usage after optimization: {df.memory_usage(deep=True).sum() / (1024**2):.2f} MB")
+    return df
+
 def contain_ls(ls):
     result_ls = []
     for x in ls:
@@ -33,7 +66,7 @@ def get_range_label(days):
         return '730+'
 
 def pre_kuaicomt():
-
+    
     # KuaiComt
     df_kuaiComt_interaction_ls = []
     file_names = ['../rec_datasets/KuaiComt/user_photo_final_filtered_table.csv']
@@ -44,8 +77,9 @@ def pre_kuaicomt():
     
 
     df_kuaiComt_interaction_standard = pd.concat(df_kuaiComt_interaction_ls,axis=0)
-
-    df_kuaiComt_interaction_standard['play_time_truncate'] = df_kuaiComt_interaction_standard.apply(lambda row:row['play_time_ms'] if row['play_time_ms']<row['duration_ms'] else row['duration_ms'],axis=1)
+    # 对交互数据先截取前1000条，减少内存使用
+    df_sample = df_kuaiComt_interaction_standard.iloc[:1000].copy()
+    '''
     df_kuaiComt_interaction_standard['duration_ms'] = np.round(df_kuaiComt_interaction_standard['duration_ms'].values/1e3)
     df_kuaiComt_interaction_standard['play_time_ms'] = np.round(df_kuaiComt_interaction_standard['play_time_ms'].values/1e3)
     df_kuaiComt_interaction_standard['play_time_truncate'] = np.round(df_kuaiComt_interaction_standard['play_time_truncate'].values/1e3)
@@ -56,15 +90,26 @@ def pre_kuaicomt():
     df_kuaiComt_interaction_standard['date'] = df_kuaiComt_interaction_standard['time_ms'].apply(lambda x:datetime.datetime.fromtimestamp(x/1000).strftime('%Y%m%d%H'))
     
     df_comments_text = pd.read_csv('../rec_datasets/KuaiComt/comment_table_final.csv', sep='\t', on_bad_lines="skip")
+            '''
+            
+    df_sample['play_time_truncate'] = df_sample.apply(lambda row: row['play_time_ms'] if row['play_time_ms'] < row['duration_ms'] else row['duration_ms'], axis=1)
+    df_sample['duration_ms'] = np.round(df_sample['duration_ms'].values / 1e3)
+    df_sample['play_time_ms'] = np.round(df_sample['play_time_ms'].values / 1e3)
+    df_sample['play_time_truncate'] = np.round(df_sample['play_time_truncate'].values / 1e3)
+    df_sample['comment_stay_time'] = df_sample['comment_stay_time'].values / 1e3
+    df_sample['open_comment'] = df_sample['comment_stay_time'].apply(lambda x: 1 if x > 0 else 0)
+    df_sample['date'] = df_sample['time_ms'].apply(lambda x: datetime.datetime.fromtimestamp(x / 1000).strftime('%Y%m%d%H'))
     
-     # Ensure comment_id in df_comments_text is consistent with comment_id in df_kuaiComt_interaction_standard
-    df_kuaiComt_interaction_standard = pd.merge(
-        df_kuaiComt_interaction_standard,
-        df_comments_text[['comment_id', 'comment_content_en', 'comment_like_cnt', 'comment_reply_cnt']],
-        on='comment_id',
-        how='left' # Use left join to keep all interactions, even if comment_content_en is missing
+    
+    df_comments_text = pd.read_csv('../rec_datasets/KuaiComt/comment_table_final.csv', sep='\t', on_bad_lines="skip")
+
+    df_sample = pd.merge(
+       df_sample,
+       df_comments_text[['photo_id', 'comment_content_en', 'comment_like_cnt', 'comment_reply_cnt']],
+       on='photo_id',
+       how='left'  # 保留所有交互记录
     )
-    
+
     # preprocess the user feature
     dic_user_active_degree = {'full_active':4,'high_active':3, 'middle_active':2,'2_14_day_new':0,'low_active':1,'single_low_active':1,'30day_retention':0,'day_new':0, 'UNKNOWN':0}
     df_kuaiComt_usr_fe['user_active_degree'] = df_kuaiComt_usr_fe['user_active_degree'].apply(lambda x: dic_user_active_degree[x])
@@ -93,17 +138,23 @@ def pre_kuaicomt():
     df_kuaiComt_video_fe_basic['category'] = df_kuaiComt_video_fe_basic['category'].apply(lambda x: compare_max(x, count_info))
 
     # merge the dataframe
-    df_kuaiComt_interaction_standard = pd.merge(df_kuaiComt_interaction_standard, df_kuaiComt_usr_fe, on=['user_id'], how='left')
-    df_kuaiComt_interaction_standard = pd.merge(df_kuaiComt_interaction_standard, df_kuaiComt_video_fe_basic, on=['photo_id'], how='left')
-    df_kuaiComt_interaction_standard['video_id'] = df_kuaiComt_interaction_standard['photo_id']
+    #df_kuaiComt_interaction_standard = pd.merge(df_kuaiComt_interaction_standard, df_kuaiComt_usr_fe, on=['user_id'], how='left')
+    #df_kuaiComt_interaction_standard = pd.merge(df_kuaiComt_interaction_standard, df_kuaiComt_video_fe_basic, on=['photo_id'], how='left')
+    #df_kuaiComt_interaction_standard['video_id'] = df_kuaiComt_interaction_standard['photo_id']
+    df_sample = pd.merge(df_sample, df_kuaiComt_usr_fe, on=['user_id'], how='left')
+    df_sample = pd.merge(df_sample, df_kuaiComt_video_fe_basic, on=['photo_id'], how='left')
+    df_sample['video_id'] = df_sample['photo_id']
 
     # select duration range and featrues
-    df_sel_dat = df_kuaiComt_interaction_standard[(df_kuaiComt_interaction_standard['duration_ms']>=5) & (df_kuaiComt_interaction_standard['duration_ms']<=400)]
+    #df_sel_dat = df_kuaiComt_interaction_standard[(df_kuaiComt_interaction_standard['duration_ms']>=5) & (df_kuaiComt_interaction_standard['duration_ms']<=400)]
+    
+    df_sel_dat = df_sample[(df_sample['duration_ms'] >= 5) & (df_sample['duration_ms'] <= 400)]
+
     df_sel_dat = df_sel_dat[['date', 'time_ms', 'user_id','video_id','author_id','category','video_type',
                             'is_like','is_follow','is_comment','is_forward','is_hate',
                             'profile_stay_time','comment_stay_time','follow_user_num_range','register_days_range',
                             'fans_user_num_range','friend_user_num_range','user_active_degree','duration_ms','play_time_truncate','play_time_ms','open_comment',
-                             'sampled_comments_reindexed','user_clicked','comments_score','comment0_id','comment1_id','comment2_id','comment3_id','comment4_id','comment5_id','comment_id', 'comment_content_en'，'comment_like_cnt', 'comment_reply_cnt']]
+                             'sampled_comments_reindexed','user_clicked','comments_score','comment0_id','comment1_id','comment2_id','comment3_id','comment4_id','comment5_id','comment_id', 'comment_content_en','comment_like_cnt', 'comment_reply_cnt']]
     df_sel_dat['category'] =  df_sel_dat['category'].apply(lambda x: 999 if pd.isna(x) else x)
 
     user_id_map = dict(zip(np.sort(df_sel_dat['user_id'].unique()),range(len(df_sel_dat['user_id'].unique()))))
@@ -120,26 +171,4 @@ def pre_kuaicomt():
 
    
 if __name__=="__main__":
-   
-    sft_output_dir = "/user/zhuohang.yu/u17442/comments/LCU/sft"  
-    
-
-    print("Starting data preprocessing with pre_kuaicomt...")
-    processed_df = pre_kuaicomt()
-    
- 
-    print("Preprocessing complete. DataFrame head:")
-    print(processed_df.head())
-    print("\nDataFrame columns:")
-    print(processed_df.columns)
-    print("\nDataFrame info:")
-    print(processed_df.info())
-
-    # 过滤缺失值
-    processed_df_comments = processed_df.dropna(subset=['comment_id', 'comment_content_en']).copy()
-    print(f"\nFiltered DataFrame for comments tasks: {len(processed_df_comments)} rows")
-
-    # 保存到已存在的 sft 目录中
-    output_path = os.path.join(sft_output_dir, "processed_data.json")  # 自定义输出文件名
-    processed_df_comments.to_json(output_path, orient="records", indent=2)  # 保存为JSON
-    print(f"\nData saved to: {output_path}")
+    pass
