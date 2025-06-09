@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import datetime
-
+import os
 def contain_ls(ls):
     result_ls = []
     for x in ls:
@@ -54,8 +54,17 @@ def pre_kuaicomt():
     df_kuaiComt_interaction_standard['open_comment'] =df_kuaiComt_interaction_standard['comment_stay_time'].apply(lambda x: 1 if x>0 else 0)
 
     df_kuaiComt_interaction_standard['date'] = df_kuaiComt_interaction_standard['time_ms'].apply(lambda x:datetime.datetime.fromtimestamp(x/1000).strftime('%Y%m%d%H'))
-
-
+    
+    df_comments_text = pd.read_csv('../rec_datasets/KuaiComt/comment_table_final.csv', sep='\t', on_bad_lines="skip")
+    
+     # Ensure comment_id in df_comments_text is consistent with comment_id in df_kuaiComt_interaction_standard
+    df_kuaiComt_interaction_standard = pd.merge(
+        df_kuaiComt_interaction_standard,
+        df_comments_text[['comment_id', 'comment_content_en']],
+        on='comment_id',
+        how='left' # Use left join to keep all interactions, even if comment_content_en is missing
+    )
+    
     # preprocess the user feature
     dic_user_active_degree = {'full_active':4,'high_active':3, 'middle_active':2,'2_14_day_new':0,'low_active':1,'single_low_active':1,'30day_retention':0,'day_new':0, 'UNKNOWN':0}
     df_kuaiComt_usr_fe['user_active_degree'] = df_kuaiComt_usr_fe['user_active_degree'].apply(lambda x: dic_user_active_degree[x])
@@ -94,7 +103,7 @@ def pre_kuaicomt():
                             'is_like','is_follow','is_comment','is_forward','is_hate',
                             'profile_stay_time','comment_stay_time','follow_user_num_range','register_days_range',
                             'fans_user_num_range','friend_user_num_range','user_active_degree','duration_ms','play_time_truncate','play_time_ms','open_comment',
-                             'sampled_comments_reindexed','user_clicked','comments_score','comment0_id','comment1_id','comment2_id','comment3_id','comment4_id','comment5_id']]
+                             'sampled_comments_reindexed','user_clicked','comments_score','comment0_id','comment1_id','comment2_id','comment3_id','comment4_id','comment5_id','comment_id', 'comment_content_en']]
     df_sel_dat['category'] =  df_sel_dat['category'].apply(lambda x: 999 if pd.isna(x) else x)
 
     user_id_map = dict(zip(np.sort(df_sel_dat['user_id'].unique()),range(len(df_sel_dat['user_id'].unique()))))
@@ -111,4 +120,26 @@ def pre_kuaicomt():
 
    
 if __name__=="__main__":
-    pass
+   
+    sft_output_dir = "/user/zhuohang.yu/u17442/comments/LCU/sft"  
+    
+
+    print("Starting data preprocessing with pre_kuaicomt...")
+    processed_df = pre_kuaicomt()
+    
+ 
+    print("Preprocessing complete. DataFrame head:")
+    print(processed_df.head())
+    print("\nDataFrame columns:")
+    print(processed_df.columns)
+    print("\nDataFrame info:")
+    print(processed_df.info())
+
+    # 过滤缺失值
+    processed_df_comments = processed_df.dropna(subset=['comment_id', 'comment_content_en']).copy()
+    print(f"\nFiltered DataFrame for comments tasks: {len(processed_df_comments)} rows")
+
+    # 保存到已存在的 sft 目录中
+    output_path = os.path.join(sft_output_dir, "processed_data.json")  # 自定义输出文件名
+    processed_df_comments.to_json(output_path, orient="records", indent=2)  # 保存为JSON
+    print(f"\nData saved to: {output_path}")
