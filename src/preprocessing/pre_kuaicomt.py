@@ -41,7 +41,7 @@ def pre_kuaicomt():
         df_kuaiComt_interaction_ls.append(pd.read_csv(file_name, sep='\t'))
     df_kuaiComt_usr_fe = pd.read_csv('../rec_datasets/KuaiComt/user_table_final.csv',sep='\t')
     df_kuaiComt_video_fe_basic = pd.read_csv('../rec_datasets/KuaiComt/photo_table_final.csv',sep='\t', lineterminator='\n')
-
+    
 
     df_kuaiComt_interaction_standard = pd.concat(df_kuaiComt_interaction_ls,axis=0)
 
@@ -60,7 +60,7 @@ def pre_kuaicomt():
      # Ensure comment_id in df_comments_text is consistent with comment_id in df_kuaiComt_interaction_standard
     df_kuaiComt_interaction_standard = pd.merge(
         df_kuaiComt_interaction_standard,
-        df_comments_text[['comment_id', 'comment_content_en']],
+        df_comments_text[['comment_id', 'comment_content_en', 'comment_like_cnt', 'comment_reply_cnt']],
         on='comment_id',
         how='left' # Use left join to keep all interactions, even if comment_content_en is missing
     )
@@ -103,7 +103,7 @@ def pre_kuaicomt():
                             'is_like','is_follow','is_comment','is_forward','is_hate',
                             'profile_stay_time','comment_stay_time','follow_user_num_range','register_days_range',
                             'fans_user_num_range','friend_user_num_range','user_active_degree','duration_ms','play_time_truncate','play_time_ms','open_comment',
-                             'sampled_comments_reindexed','user_clicked','comments_score','comment0_id','comment1_id','comment2_id','comment3_id','comment4_id','comment5_id','comment_id', 'comment_content_en']]
+                             'sampled_comments_reindexed','user_clicked','comments_score','comment0_id','comment1_id','comment2_id','comment3_id','comment4_id','comment5_id','comment_id', 'comment_content_en'，'comment_like_cnt', 'comment_reply_cnt']]
     df_sel_dat['category'] =  df_sel_dat['category'].apply(lambda x: 999 if pd.isna(x) else x)
 
     user_id_map = dict(zip(np.sort(df_sel_dat['user_id'].unique()),range(len(df_sel_dat['user_id'].unique()))))
