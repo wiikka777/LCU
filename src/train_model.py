@@ -14,8 +14,6 @@ from utils.early_stop import EarlyStopping2
 from utils.loss import ListMLELoss
 from utils.evaluate import cal_group_metric, cal_reg_metric
 from preprocessing.cal_ground_truth import cal_ground_truth
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "" 
 
 class Learner(object):
     
@@ -50,16 +48,12 @@ class Learner(object):
         self.lambda1 = args.lambda1
         self.lambda2 = args.lambda2
         
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.photo_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings.pt', map_location=device)[:100].to(dtype=torch.float32).to(device)
-        #self.photo_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings.pt').to(dtype=torch.float32).cuda()
+        self.photo_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings.pt').to(dtype=torch.float32).cuda()
         print("Loading pre-computed text embeddings...")
         self.photo_embeddings.requires_grad = False  # 冻结嵌入
 
         # 加载评论的BERT嵌入
-        #self.comment_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings_comments.pt').to(dtype=torch.float32).cuda()
-        self.comment_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings_comments.pt')[:100].to(dtype=torch.float32).to(device)
-
+        self.comment_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings_comments.pt').to(dtype=torch.float32).cuda()
         print("Loading pre-computed comment embeddings...")
         self.comment_embeddings.requires_grad = False  # 冻结嵌入
 
@@ -81,44 +75,13 @@ class Learner(object):
 
     def _load_and_spilt_dat(self):
         if self.dat_name == 'KuaiComt':
-            all_dat = pd.read_csv('../rec_datasets/WM_KuaiComt/KuaiComt_subset.csv',nrows=100)
-            
-            all_dat = all_dat.head(100)
-            #all_dat = cal_ground_truth(all_dat, self.dat_name)
-            def preprocess_ids(data):
-            # 确保ID从0开始连续索引
-                data['user_id'] = data['user_id'] - data['user_id'].min()
-                data['video_id'] = data['video_id'] - data['video_id'].min()
-                data['author_id'] = data['author_id'] - data['author_id'].min()
-            
-            # 分类特征处理
-                data['follow_user_num_range'] = data['follow_user_num_range'] - 1
-                data['user_active_degree'] = data['user_active_degree'] - 1
-            
-            # 评论ID强制映射到0-99（关键修改）
-                for i in range(6):
-                    col = f'comment{i}_id'
-                    unique_ids = data[col].unique()
-                    id_map = {id: idx for idx, id in enumerate(unique_ids)}
-                    assert len(id_map) <= 100, "评论ID数量超过100，请调整comments_dims"
-                    data[col] = data[col].map(id_map) 
-                return data
-            
-            all_dat = preprocess_ids(all_dat)
-            print("强制映射后评论ID范围:", [all_dat[f'comment{i}_id'].max() for i in range(6)]) 
-            assert all(all_dat[f'comment{i}_id'].max() < 100 for i in range(6))
-            print("预处理后ID范围验证:")
-            print("user_id:", all_dat['user_id'].min(), all_dat['user_id'].max())
-            print("video_id:", all_dat['video_id'].min(), all_dat['video_id'].max())
-            
-            train_size = int(len(all_dat) * 0.6)
-            vali_size = int(len(all_dat) * 0.2)
-            
-            train_dat = all_dat[:train_size]
-            vali_dat = all_dat[train_size:train_size + vali_size]
-            test_dat = all_dat[train_size + vali_size:]
+            all_dat = pd.read_csv('../rec_datasets/WM_KuaiComt/KuaiComt_subset.csv')
+            all_dat = cal_ground_truth(all_dat, self.dat_name)
+            train_dat = all_dat[(all_dat['date'] <= 2023102199) & (all_dat['date'] >= 2023100100)]
+            vali_dat = all_dat[(all_dat['date'] <= 2023102699) & (all_dat['date'] >= 2023102200)]
+            test_dat = all_dat[(all_dat['date'] <= 2023103199) & (all_dat['date'] >= 2023102700)]
 
-        return all_dat,train_dat, vali_dat, test_dat
+        return all_dat, train_dat, vali_dat, test_dat
 
 
     def _wrap_dat(self):
@@ -133,17 +96,14 @@ class Learner(object):
 
         input_vali = Wrap_Dataset(make_feature_with_comments(self.vali_dat, self.dat_name),
                                 self.vali_dat[self.label_name].tolist(),
-                                #self.vali_dat[self.weight_name].tolist(),
-                                use_cuda=False)
-                                 
+                                self.vali_dat[self.weight_name].tolist())
         vali_loader = DataLoader(input_vali, 
                                         batch_size=2048, 
                                         shuffle=False)
 
         input_test = Wrap_Dataset(make_feature_with_comments(self.test_dat, self.dat_name),
                                 self.test_dat[self.label_name].tolist(),
-                                #self.test_dat[self.weight_name].tolist(),
-                                use_cuda=False)
+                                self.test_dat[self.weight_name].tolist())
         test_loader = DataLoader(input_test, 
                                         batch_size=2048, 
                                         shuffle=False)
@@ -151,37 +111,13 @@ class Learner(object):
 
     
     def _init_train_env(self):
-        
         if self.model_name == 'DCN':
-            field_dims = [
-            int(self.all_dat['user_id'].max()) + 1,        # user_id
-            int(self.all_dat['follow_user_num_range'].max()) + 1,  # follow
-            int(self.all_dat['register_days_range'].max()) + 1,
-            int(self.all_dat['fans_user_num_range'].max()) + 1,
-            int(self.all_dat['friend_user_num_range'].max()) + 1,
-            int(self.all_dat['user_active_degree'].max()) + 1,
-            int(self.all_dat['video_id'].max()) + 1,       # video_id
-            int(self.all_dat['author_id'].max()) + 1 
-            ]
-        # 后 6 个字段：comment0_id 到 comment5_id
-            comments_dims = [100] * 6  
-            total_embed_dim = (len(field_dims) + len(comments_dims)) * 10  # 假设embed_dim=10
-            print(f"期望总嵌入维度: {total_embed_dim}")
+            model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
+            c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
 
-            
-            
-            #model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
-            #c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
-            model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=field_dims,comments_dims=comments_dims,embed_dim=10,num_layers=3,mlp_dims=[64, 64, 64],dropout=0.2,text_embeddings=[self.photo_embeddings, self.comment_embeddings])
-            c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=field_dims,comments_dims=comments_dims,embed_dim=10,num_layers=3,mlp_dims=[64, 64, 64],dropout=0.2,text_embeddings=[self.photo_embeddings, self.comment_embeddings])
-
-
-        #if self.use_cuda:
-            #model = model.cuda()
-            #c_model = c_model.cuda()
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = model.to(device)
-        c_model = c_model.to(device)
+        if self.use_cuda:
+            model = model.cuda()
+            c_model = c_model.cuda()
 
         lr = 1e-4
         optim = Adam(model.parameters(), lr=lr, weight_decay=self.weight_decay)
@@ -202,14 +138,11 @@ class Learner(object):
             loss_log = []
             c_loss_log = []
 
-            #self.model.train()
-            #self.c_model.train()
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            self.model.to(device)
-            self.c_model = self.c_model.to(device)
+            self.model.train()
+            self.c_model.train()
 
             for _id, batch in enumerate(self.train_loader):
-                batch = [item.to(device) for item in batch]
+                batch = [item.cuda() for item in batch]
                 self.c_model.train()
                 self.c_optim.zero_grad()
                 BCELossfunc = BCEWithLogitsLoss()
@@ -263,34 +196,12 @@ class Learner(object):
                                                         0, rmse, mae, xgauc, xauc))
 
     def _test_and_save(self):
-    # 使用与训练时完全相同的维度计算方法
-        field_dims = [
-           int(self.all_dat['user_id'].max()) + 1,
-           int(self.all_dat['follow_user_num_range'].max()) + 1,
-           int(self.all_dat['register_days_range'].max()) + 1,
-           int(self.all_dat['fans_user_num_range'].max()) + 1,
-           int(self.all_dat['friend_user_num_range'].max()) + 1,
-           int(self.all_dat['user_active_degree'].max()) + 1,
-           int(self.all_dat['video_id'].max()) + 1,
-           int(self.all_dat['author_id'].max()) + 1
-           ]
-    
-        comment_dims = [100] * 6
-    
-        print("测试阶段维度验证:")
-        print("field_dims:", field_dims)
-        print("comment_dims:", comment_dims)
-        
         if self.model_name == 'DCN':
-            model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=field_dims, comments_dims=comment_dims, embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
-            c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=field_dims, comments_dims=comment_dims, embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
+            model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
+            c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
-        #model = model.cuda()
-        #c_model = c_model.cuda()
-        model=model.to(device)
-        c_model=c_model.to(device)
+        model = model.cuda()
+        c_model = c_model.cuda()
 
         model.load_state_dict(torch.load(self.fout + '_temp_checkpoint.pt'))
         c_model.load_state_dict(torch.load(self.fout + '_temp_usr_checkpoint.pt'))
