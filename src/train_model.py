@@ -47,16 +47,48 @@ class Learner(object):
         self.load_to_eval = args.load_to_eval
         self.lambda1 = args.lambda1
         self.lambda2 = args.lambda2
-        
+
+        self.embed_chunk_size = 1000
         self.photo_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings.pt').to(dtype=torch.float32).cuda()
         print("Loading pre-computed text embeddings...")
-        self.photo_embeddings.requires_grad = False  # 冻结嵌入
+        #self.photo_embeddings.requires_grad = False  # 冻结嵌入
 
         # 加载评论的BERT嵌入
         self.comment_embeddings = torch.load('../rec_datasets/KuaiComt/bert-embeddings_comments.pt').to(dtype=torch.float32).cuda()
         print("Loading pre-computed comment embeddings...")
-        self.comment_embeddings.requires_grad = False  # 冻结嵌入
+        #self.comment_embeddings.requires_grad = False  # 冻结嵌入
 
+        # 延迟加载（仅存储路径）
+        self.photo_embeddings = None  
+        self.comment_embeddings = None
+
+    def _load_embeddings_safely(self):
+        """安全加载嵌入的完整流程"""
+        # 1. 先加载小文件（照片嵌入）
+        if self.photo_embeddings is None:
+            print("Loading photo embeddings...")
+            photo_embed = torch.load(self.photo_embed_path, map_location='cpu')
+            self.photo_embeddings = photo_embed.half()  # 强制转为16位
+            if self.use_cuda:
+                self.photo_embeddings = self.photo_embeddings.pin_memory().cuda()
+            del photo_embed
+            torch.cuda.empty_cache()
+
+        # 2. 分块加载大文件（评论嵌入）
+        if self.comment_embeddings is None:
+            print("Loading comment embeddings in chunks...")
+            comment_embed = torch.load(self.comment_embed_path, map_location='cpu')
+            chunks = []
+            for i in range(0, len(comment_embed), self.embed_chunk_size):
+                chunk = comment_embed[i:i+self.embed_chunk_size].half()  # 16位
+                if self.use_cuda:
+                    chunk = chunk.pin_memory().cuda()
+                chunks.append(chunk)
+                torch.cuda.empty_cache()
+            self.comment_embeddings = torch.cat(chunks, dim=0)
+            del comment_embed
+            torch.cuda.empty_cache()  
+    
 
     def train(self):
         setup_seed(self.seed)
@@ -66,6 +98,8 @@ class Learner(object):
         if not self.load_to_eval:
             self._train_iteration()
         self._test_and_save()
+         
+       
 
     @staticmethod
     def _cal_correct_wt(row, sigma=1.0):
@@ -98,22 +132,28 @@ class Learner(object):
                                 self.vali_dat[self.label_name].tolist(),
                                 self.vali_dat[self.weight_name].tolist())
         vali_loader = DataLoader(input_vali, 
-                                        batch_size=2048, 
+                                        #batch_size=2048,
+                                        batch_size=64, 
                                         shuffle=False)
 
         input_test = Wrap_Dataset(make_feature_with_comments(self.test_dat, self.dat_name),
                                 self.test_dat[self.label_name].tolist(),
                                 self.test_dat[self.weight_name].tolist())
         test_loader = DataLoader(input_test, 
-                                        batch_size=2048, 
+                                        #batch_size=2048,
+                                        batch_size=64, 
                                         shuffle=False)
         return train_loader, vali_loader, test_loader
 
     
     def _init_train_env(self):
+
+        self._load_embeddings_safely()  # 使用安全加载
+
+#改参数
         if self.model_name == 'DCN':
-            model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
-            c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=10, num_layers=3, mlp_dims=[64,64,64], dropout=0.2, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
+            model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=4, num_layers=2, mlp_dims=[8], dropout=0.1, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
+            c_model = My_DeepCrossNetworkModel_withCommentsRanking(field_dims=cal_field_dims(self.all_dat, self.dat_name), comments_dims=cal_comments_dims(self.all_dat, self.dat_name), embed_dim=4, num_layers=2, mlp_dims=[8], dropout=0.1, text_embeddings=[self.photo_embeddings, self.comment_embeddings])
 
         if self.use_cuda:
             model = model.cuda()
@@ -133,6 +173,7 @@ class Learner(object):
     def _train_iteration(self):
         dur=[]
         for epoch in range(self.epoch_num):
+          
             if epoch >= 0:
                 t0 = time.time()
             loss_log = []
