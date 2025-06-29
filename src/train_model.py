@@ -132,16 +132,14 @@ class Learner(object):
                                 self.vali_dat[self.label_name].tolist(),
                                 self.vali_dat[self.weight_name].tolist())
         vali_loader = DataLoader(input_vali, 
-                                        #batch_size=2048,
-                                        batch_size=64, 
+                                        batch_size=2048,
                                         shuffle=False)
 
         input_test = Wrap_Dataset(make_feature_with_comments(self.test_dat, self.dat_name),
                                 self.test_dat[self.label_name].tolist(),
                                 self.test_dat[self.weight_name].tolist())
         test_loader = DataLoader(input_test, 
-                                        #batch_size=2048,
-                                        batch_size=64, 
+                                        batch_size=2048,
                                         shuffle=False)
         return train_loader, vali_loader, test_loader
 
